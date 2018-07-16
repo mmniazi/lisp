@@ -1,6 +1,6 @@
 all:
-	cc -std=c99 -Wall parsing.c libs/mpc.c -ledit -lm -o parsing
-	./parsing
+	cc -std=c99 -Wall lispc.c libs/mpc.c -ledit -lm -o lispc
+	./lispc standard_lib.lisp
 
 clean:
-	rm parsing
+	rm lispc
