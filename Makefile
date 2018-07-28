@@ -3,4 +3,9 @@ all:
 	./lispc standard_lib.lisp
 
 clean:
-	rm lispc
+	rm -f lispc parser
+
+.PHONY: parser
+parser:
+	cc -std=c11 -Wall parser.c -g parser
+	./parser

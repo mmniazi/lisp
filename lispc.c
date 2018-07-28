@@ -3,6 +3,7 @@
 #include <editline/readline.h>
 #include "libs/mpc.h"
 #include "builtins.c"
+#include "parser.c"
 
 mpc_parser_t *Number;
 mpc_parser_t *Symbol;
@@ -173,15 +174,16 @@ void load_input_files(int argc, char **argv, lenv *e) {
 }
 
 int main(int argc, char **argv) {
-    define_grammer();
-
-    lenv *global_env = lenv_new();
-    lenv_add_builtins(global_env);
-
-    load_input_files(argc, argv, global_env);
-
-    repl(global_env);
-
-    mpc_cleanup(7, Number, String, Comment, Symbol, Sexpr, Qexpr, Expr, Lispy);
+    parse("(def {true} 1)");
+//    define_grammer();
+//
+//    lenv *global_env = lenv_new();
+//    lenv_add_builtins(global_env);
+//
+//    load_input_files(argc, argv, global_env);
+//
+//    repl(global_env);
+//
+//    mpc_cleanup(7, Number, String, Comment, Symbol, Sexpr, Qexpr, Expr, Lispy);
     return 0;
 }
