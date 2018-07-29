@@ -3,7 +3,7 @@
 #include <editline/readline.h>
 #include "libs/mpc.h"
 #include "builtins.c"
-#include "parser.c"
+#include "tokenizer.c"
 
 mpc_parser_t *Number;
 mpc_parser_t *Symbol;
@@ -174,7 +174,10 @@ void load_input_files(int argc, char **argv, lenv *e) {
 }
 
 int main(int argc, char **argv) {
-    parse("(def {true} 1)");
+    char str[] = "asda  asdasd a12\n"
+                 "123\";'\"\n"
+                 "{1.12312asdasd\"}";
+    debug_tokenizer(tokenize(str));
 //    define_grammer();
 //
 //    lenv *global_env = lenv_new();
