@@ -15,19 +15,21 @@ enum {
     TOKENIZER_ERROR
 };
 
-typedef struct token {
-    int type;
+typedef struct code_context {
     int row;
     int col;
+    char *trace;
+} code_context;
+
+typedef struct token {
+    int type;
     char *val;
-    char *context;
+    code_context *context;
 } token;
 
 typedef struct error {
-    int row;
-    int col;
     char *val;
-    char *context;
+    code_context *context;
 } error;
 
 typedef struct tokens {
@@ -75,18 +77,24 @@ int is_symbol(const char *input) {
     return !is_space(input) && !is_reserved_symbol(input);
 }
 
-int col_number(const char *curr_loc, const char *row_start) {
+int column(const char *curr_loc, const char *row_start) {
     return (int) (curr_loc - row_start + 1);
+}
+
+code_context *create_context(int row, int col, const char *trace) {
+    code_context *context = malloc(sizeof(code_context));
+    context->row = row;
+    context->col = col;
+    context->trace = malloc(strlen(trace) + 1);
+    strcpy(context->trace, trace);
+    return context;
 }
 
 token *create_token(const char *start, const char *curr_loc, int type,
                     int row_no, const char *row) {
-    int col = col_number(start, row);
+    int col_no = column(start, row);
     token *t = malloc(sizeof(token));
-    t->row = row_no;
-    t->col = col;
-    t->context = malloc(strlen(row) + 1);
-    strcpy(t->context, row);
+    t->context = create_context(row_no, col_no, row);
     t->type = type;
     unsigned long len = curr_loc - start;
     t->val = malloc(len + 1);
@@ -110,15 +118,12 @@ tokens *init_tokens() {
     return t;
 }
 
-tokens *create_error(tokens *t, int row, int col, char *err_str, char *context) {
+tokens *create_error(tokens *t, int row, int col, char *err_str, char *trace) {
     t->type = TOKENIZER_ERROR;
     error *err = malloc(sizeof(error));
-    err->row = row;
-    err->col = col;
     err->val = malloc(strlen(err_str) + 1);
     strcpy(err->val, err_str);
-    err->context = malloc(strlen(context) + 1);
-    strcpy(err->context, context);
+    err->context = create_context(row, col, trace);
     t->err = err;
     return t;
 }
@@ -152,7 +157,7 @@ tokens *tokenize_row(char *input, int row_no, tokens *token_list) {
             char *start = input;
             while (!is_qoutes(input) || is_escape_char(prev)) {
                 if (is_empty(input)) {
-                    int col_no = col_number(input, row);
+                    int col_no = column(input, row);
                     char *err = "missing string delimiter, expected \"";
                     return create_error(token_list, row_no, col_no, err, row);
                 }
@@ -180,7 +185,7 @@ tokens *tokenize_row(char *input, int row_no, tokens *token_list) {
         } else if (is_space(input)) {
             input++;
         } else {
-            int col_no = col_number(input, row);
+            int col_no = column(input, row);
             char *err = "Failed to tokenize";
             return create_error(token_list, row_no, col_no, err, row);
         }
@@ -222,19 +227,21 @@ void debug_tokenizer(tokens *t) {
         for (int token_no = 0; token_no < t->count; token_no++) {
             char *type = token_name(t->items[token_no]->type);
             char *value = t->items[token_no]->val;
-            int row_no = t->items[token_no]->row;
-            int col_no = t->items[token_no]->col;
+            int row_no = t->items[token_no]->context->row;
+            int col_no = t->items[token_no]->context->col;
             printf("row %d column %d: %s(%s)\n", row_no, col_no, type, value);
             printf("Context:\n");
-            printf("%s\n", t->items[token_no]->context);
-            for (int i = 1; i < t->items[token_no]->col; i++) printf(" ");
+            printf("%s\n", t->items[token_no]->context->trace);
+            for (int i = 1; i < t->items[token_no]->context->col; i++) printf(" ");
             puts("^\n");
         }
     } else if (t->type == TOKENIZER_ERROR) {
-        printf("row %d column %d: %s\n", t->err->row, t->err->col, t->err->val);
+        int row_no = t->err->context->row;
+        int col_no = t->err->context->col;
+        printf("row %d column %d: %s\n", row_no, col_no, t->err->val);
         printf("Context:\n");
-        printf("%s\n", t->err->context);
-        for (int i = 1; i < t->err->col; i++) printf(" ");
+        printf("%s\n", t->err->context->trace);
+        for (int i = 1; i < col_no; i++) printf(" ");
         puts("^\n");
     }
 }
