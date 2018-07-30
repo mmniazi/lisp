@@ -85,8 +85,7 @@ code_context *create_context(int row, int col, const char *trace) {
     code_context *context = malloc(sizeof(code_context));
     context->row = row;
     context->col = col;
-    context->trace = malloc(strlen(trace) + 1);
-    strcpy(context->trace, trace);
+    context->trace = str_dup(trace);
     return context;
 }
 
@@ -97,9 +96,7 @@ token *create_token(const char *start, const char *curr_loc, int type,
     t->context = create_context(row_no, col_no, row);
     t->type = type;
     unsigned long len = curr_loc - start;
-    t->val = malloc(len + 1);
-    strncpy(t->val, start, len);
-    t->val[len] = '\0';
+    t->val = str_dup_n(start, len);
     return t;
 }
 
@@ -121,8 +118,7 @@ tokens *init_tokens() {
 tokens *create_error(tokens *t, int row, int col, char *err_str, char *trace) {
     t->type = TOKENIZER_ERROR;
     error *err = malloc(sizeof(error));
-    err->val = malloc(strlen(err_str) + 1);
-    strcpy(err->val, err_str);
+    err->val = str_dup(err_str);
     err->context = create_context(row, col, trace);
     t->err = err;
     return t;
