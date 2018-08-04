@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include "libs/mpc.h"
 #include "lval.c"
 
 #define LASSERT(args, cond, fmt, ...) \
@@ -339,11 +338,12 @@ void lenv_add_builtin(lenv *e, char *name, lbuiltin func) {
     lval_del(v);
 }
 
-lval* builtin_print(lenv* e, lval* a) {
+lval *builtin_print(lenv *e, lval *a) {
 
     /* Print each argument followed by a space */
     for (int i = 0; i < a->count; i++) {
-        lval_print(a->cell[i]); putchar(' ');
+        lval_print(a->cell[i]);
+        putchar(' ');
     }
 
     /* Print a newline and delete arguments */
@@ -353,12 +353,12 @@ lval* builtin_print(lenv* e, lval* a) {
     return lval_sexpr();
 }
 
-lval* builtin_error(lenv* e, lval* a) {
+lval *builtin_error(lenv *e, lval *a) {
     LASSERT_NUM("error", a, 1);
     LASSERT_TYPE("error", a, 0, LVAL_STR);
 
     /* Construct Error from first argument */
-    lval* err = lval_err(a->cell[0]->str);
+    lval *err = lval_err(a->cell[0]->str);
 
     /* Delete arguments and return */
     lval_del(a);
@@ -504,4 +504,109 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
         return lval_copy(f);
     }
 
+}
+
+lval *builtin_load_file(lenv *e, lval *file) {
+    LASSERT_NUM("load", file, 1);
+    LASSERT_TYPE("load", file, 0, LVAL_STR);
+
+    char *file_name = file->cell[0]->str;
+    char *file_content = load_file(file_name);
+    if (file_content == NULL)
+        return lval_err("Could not load %s: Failed to load file", file_name);
+
+    ast *tree = parse(file_content);
+
+    if (tree->type != AST_ERROR) {
+        lval *expr = lval_read(tree);
+
+        /* Evaluate each Expression */
+        while (expr->count) {
+            lval *x = lval_eval(e, lval_pop(expr, 0));
+            /* If Evaluation leads to error print it */
+            if (x->type == LVAL_ERR) { lval_println(x); }
+            lval_del(x);
+        }
+
+        free_ast(tree);
+        lval_del(expr);
+        lval_del(file);
+
+        return lval_sexpr();
+    } else {
+        char *err_str = ast_error_str(tree->context, tree->val);
+        lval *err = lval_err("Could not load %s: \n%s", file_name, err_str);
+
+        free_ast(tree);
+        lval_del(file);
+
+        return err;
+    }
+}
+
+void lenv_add_builtins(lenv *e) {
+    /* List Functions */
+    lenv_add_builtin(e, "list", builtin_list);
+    lenv_add_builtin(e, "head", builtin_head);
+    lenv_add_builtin(e, "tail", builtin_tail);
+    lenv_add_builtin(e, "eval", builtin_eval);
+    lenv_add_builtin(e, "join", builtin_join);
+
+    /* Mathematical Functions */
+    lenv_add_builtin(e, "+", builtin_add);
+    lenv_add_builtin(e, "-", builtin_sub);
+    lenv_add_builtin(e, "*", builtin_mul);
+    lenv_add_builtin(e, "/", builtin_div);
+
+    /* Variable Functions */
+    lenv_add_builtin(e, "def", builtin_def);
+    lenv_add_builtin(e, "=", builtin_put);
+
+
+    /* Exit REPL */
+    lenv_add_builtin(e, "exit", builtin_exit);
+
+    /* User defined functions */
+    lenv_add_builtin(e, "lambda", builtin_lambda);
+    lenv_add_builtin(e, "fun", builtin_fun);
+
+    /* Conditionals Functions */
+    lenv_add_builtin(e, "if", builtin_if);
+    lenv_add_builtin(e, "==", builtin_eq);
+    lenv_add_builtin(e, "!=", builtin_ne);
+    lenv_add_builtin(e, "<", builtin_gt);
+    lenv_add_builtin(e, "<=", builtin_ge);
+    lenv_add_builtin(e, ">", builtin_lt);
+    lenv_add_builtin(e, ">=", builtin_le);
+    lenv_add_builtin(e, "||", builtin_or);
+    lenv_add_builtin(e, "&&", builtin_and);
+    lenv_add_builtin(e, "!", builtin_not);
+    lenv_put(e, lval_sym("true"), lval_num(1));
+    lenv_put(e, lval_sym("false"), lval_num(0));
+
+    /* Generic Functions */
+    /* String Functions */
+    lenv_add_builtin(e, "load", builtin_load_file);
+    lenv_add_builtin(e, "error", builtin_error);
+    lenv_add_builtin(e, "print", builtin_print);
+}
+
+void load_input_files(int argc, char **argv, lenv *e) {
+    /* Supplied with list of files */
+    if (argc >= 2) {
+
+        /* loop over each supplied filename (starting from 1) */
+        for (int i = 1; i < argc; i++) {
+
+            /* Argument list with a single argument, the filename */
+            lval *args = lval_add(lval_sexpr(), lval_str(argv[i]));
+
+            /* Pass to builtin load and get the result */
+            lval *x = builtin_load_file(e, args);
+
+            /* If the result is an error be sure to print it */
+            if (x->type == LVAL_ERR) { lval_println(x); }
+            lval_del(x);
+        }
+    }
 }

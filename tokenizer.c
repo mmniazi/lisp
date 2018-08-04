@@ -125,10 +125,11 @@ tokens *create_error(tokens *t, int row, int col, char *err_str, char *trace) {
 }
 
 rows *to_rows(char *string) {
+    char *cpy = str_dup(string);
     rows *r = malloc(sizeof(r));
     r->items = NULL;
     r->count = 0;
-    char *p = strtok(string, "\n");
+    char *p = strtok(cpy, "\n");
 
     while (p) {
         r->items = realloc(r->items, sizeof(char *) * ++r->count);
@@ -154,7 +155,7 @@ tokens *tokenize_row(char *input, int row_no, tokens *token_list) {
             while (!is_qoutes(input) || is_escape_char(prev)) {
                 if (is_empty(input)) {
                     int col_no = column(input, row);
-                    char *err = "missing string delimiter, expected \"";
+                    char *err = "missing string delimiter, expected '\"'";
                     return create_error(token_list, row_no, col_no, err, row);
                 }
                 input++;
@@ -175,7 +176,9 @@ tokens *tokenize_row(char *input, int row_no, tokens *token_list) {
                 token_list = add_token(symbol, token_list);
             }
         } else if (is_reserved_symbol(input)) {
-            token *res_sym = create_token(input, ++input, TOKEN_RESERVED_SYMBOL,
+            char *start = input;
+            ++input;
+            token *res_sym = create_token(start, input, TOKEN_RESERVED_SYMBOL,
                                           row_no, row);
             token_list = add_token(res_sym, token_list);
         } else if (is_space(input)) {
@@ -218,26 +221,34 @@ char *token_name(int type) {
     }
 }
 
-void debug_tokenizer(tokens *t) {
-    if (t->type == TOKENIZER_TOKENS) {
-        for (int token_no = 0; token_no < t->count; token_no++) {
-            char *type = token_name(t->items[token_no]->type);
-            char *value = t->items[token_no]->val;
-            int row_no = t->items[token_no]->context->row;
-            int col_no = t->items[token_no]->context->col;
-            printf("row %d column %d: %s(%s)\n", row_no, col_no, type, value);
-            printf("Context:\n");
-            printf("%s\n", t->items[token_no]->context->trace);
-            for (int i = 1; i < t->items[token_no]->context->col; i++) printf(" ");
-            puts("^\n");
-        }
-    } else if (t->type == TOKENIZER_ERROR) {
-        int row_no = t->err->context->row;
-        int col_no = t->err->context->col;
-        printf("row %d column %d: %s\n", row_no, col_no, t->err->val);
-        printf("Context:\n");
-        printf("%s\n", t->err->context->trace);
-        for (int i = 1; i < col_no; i++) printf(" ");
-        puts("^\n");
+void free_context(code_context *c) {
+    if (c == NULL) { return; }
+    free(c->trace);
+    free(c);
+}
+
+void free_token(token *t) {
+    if (t == NULL) { return; }
+    free(t->val);
+    free_context(t->context);
+    free(t);
+}
+
+void free_error(error *e) {
+    if (e == NULL) { return; }
+    free_context(e->context);
+    free(e->val);
+    free(e);
+}
+
+void free_tokens(tokens *t) {
+    if (t == NULL) { return; }
+
+    for (int i = 0; i < t->count; i++) {
+        free_token(t->items[i]);
     }
+
+    free(t->items);
+    if (t->type == TOKENIZER_ERROR) free_error(t->err);
+    free(t);
 }

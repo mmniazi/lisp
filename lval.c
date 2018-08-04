@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <errno.h>
-#include "libs/mpc.h"
+#include "parser.c"
 
 struct lval;
 struct lenv;
@@ -171,26 +172,11 @@ void lval_del(lval *v) {
     free(v);
 }
 
-lval *lval_read_num(mpc_ast_t *t) {
+lval *lval_read_num(ast *t) {
     errno = 0;
-    long x = strtol(t->contents, NULL, 10);
+    long x = strtol(t->val, NULL, 10);
     return errno != ERANGE ?
            lval_num(x) : lval_err("invalid number");
-}
-
-lval *lval_read_str(mpc_ast_t *t) {
-    /* Cut off the final quote character */
-    t->contents[strlen(t->contents) - 1] = '\0';
-    /* Copy the string missing out the first quote character */
-    char *unescaped = malloc(strlen(t->contents + 1) + 1);
-    strcpy(unescaped, t->contents + 1);
-    /* Pass through the unescape function */
-    unescaped = mpcf_unescape(unescaped);
-    /* Construct a new lval using the string */
-    lval *str = lval_str(unescaped);
-    /* Free the string and return */
-    free(unescaped);
-    return str;
 }
 
 lval *lval_add(lval *v, lval *x) {
@@ -200,30 +186,19 @@ lval *lval_add(lval *v, lval *x) {
     return v;
 }
 
-lval *lval_read(mpc_ast_t *t) {
-    /* If Symbol or Number return conversion to that type */
-    if (strstr(t->tag, "number")) { return lval_read_num(t); }
-    if (strstr(t->tag, "string")) { return lval_read_str(t); }
-    if (strstr(t->tag, "symbol")) { return lval_sym(t->contents); }
+lval *lval_read(ast *t) {
+    if (t->type == AST_NUMBER) { return lval_read_num(t); }
+    if (t->type == AST_STRING) { return lval_str(t->val); }
+    if (t->type == AST_SYMBOL) { return lval_sym(t->val); }
 
-    /* If root (>) or sexpr then create empty list */
-    lval *x = NULL;
-    if (!strcmp(t->tag, ">")) { x = lval_sexpr(); }
-    else if (strstr(t->tag, "sexpr")) { x = lval_sexpr(); }
-    else if (strstr(t->tag, "qexpr")) { x = lval_qexpr(); }
+    lval *v = NULL;
+    if (t->type == AST_SEXPR) { v = lval_sexpr(); }
+    else if (t->type == AST_QEXPR) { v = lval_qexpr(); }
 
-    /* Fill this list with any valid expression contained within */
-    for (int i = 0; i < t->children_num; i++) {
-        if (!strcmp(t->children[i]->contents, "(") ||
-            !strcmp(t->children[i]->contents, ")") ||
-            !strcmp(t->children[i]->contents, "{") ||
-            !strcmp(t->children[i]->contents, "}") ||
-            strstr(t->children[i]->tag, "comment") ||
-            !strcmp(t->children[i]->tag, "regex")) { continue; }
-        x = lval_add(x, lval_read(t->children[i]));
-    }
+    for (int i = 0; i < t->child_count; i++)
+        v = lval_add(v, lval_read(t->children[i]));
 
-    return x;
+    return v;
 }
 
 lval *lval_copy(lval *v) {
@@ -392,18 +367,6 @@ void lval_expr_print(lval *v, char open, char close) {
     putchar(close);
 }
 
-void lval_print_str(lval *v) {
-    /* Make a Copy of the string */
-    char *escaped = malloc(strlen(v->str) + 1);
-    strcpy(escaped, v->str);
-    /* Pass it through the escape function */
-    escaped = mpcf_escape(escaped);
-    /* Print it between " characters */
-    printf("\"%s\"", escaped);
-    /* free the copied string */
-    free(escaped);
-}
-
 void lval_print(lval *v) {
     switch (v->type) {
         case LVAL_NUM:
@@ -433,7 +396,7 @@ void lval_print(lval *v) {
             }
             break;
         case LVAL_STR:
-            lval_print_str(v);
+            printf("\"%s\"", v->str);
             break;
         default:
             break;
