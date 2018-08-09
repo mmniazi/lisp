@@ -39,11 +39,6 @@ typedef struct tokens {
     error *err;
 } tokens;
 
-typedef struct rows {
-    int count;
-    char **items;
-} rows;
-
 
 int is_empty(const char *input) {
     return *input == '\0';
@@ -61,8 +56,12 @@ int is_comment(const char *input) {
     return *input == ';';
 }
 
-int is_space(const char *input) {
-    return *input == ' ';
+int is_whitespace(const char *input) {
+    return *input == ' ' || *input == '\t';
+}
+
+int is_newline(const char *input) {
+    return *input == '\n';
 }
 
 int is_escape_char(const char *input) {
@@ -74,7 +73,13 @@ int is_reserved_symbol(const char *input) {
 }
 
 int is_symbol(const char *input) {
-    return !is_space(input) && !is_reserved_symbol(input);
+    return !is_number(input) &&
+           !is_qoutes(input) &&
+           !is_comment(input) &&
+           !is_whitespace(input) &&
+           !is_newline(input) &&
+           !is_escape_char(input) &&
+           !is_reserved_symbol(input);
 }
 
 int column(const char *curr_loc, const char *row_start) {
@@ -124,83 +129,58 @@ tokens *create_error(tokens *t, int row, int col, char *err_str, char *trace) {
     return t;
 }
 
-rows *to_rows(char *string) {
-    char *cpy = str_dup(string);
-    rows *r = malloc(sizeof(r));
-    r->items = NULL;
-    r->count = 0;
-    char *p = strtok(cpy, "\n");
 
-    while (p) {
-        r->items = realloc(r->items, sizeof(char *) * ++r->count);
-        r->items[r->count - 1] = p;
-        p = strtok(NULL, "\n");
-    }
-
-    return r;
-}
-
-tokens *tokenize_row(char *input, int row_no, tokens *token_list) {
-    char *row = input;
+tokens *tokenize(char *input) {
+    tokens *token_list = init_tokens();
+    int row_no = 1;
+    char *row_start = input;
+    // NOTE: Make sure to update is_symbol definition when adding new types
     while (!is_empty(input)) {
-        if (is_number(input)) {
+        if (is_whitespace(input)) {
+            input++;
+        } else if (is_newline(input)) {
+            input++;
+            row_no++;
+            row_start = input;
+        } else if (is_comment(input)) {
+            while (!is_newline(input) && !is_empty(input)) input++;
+        } else if (is_number(input)) {
             char *start = input;
             while (is_number(input)) input++;
             token *number = create_token(start, input, TOKEN_NUMBER,
-                                         row_no, row);
+                                         row_no, row_start);
             token_list = add_token(number, token_list);
         } else if (is_qoutes(input)) {
             char *prev = input++;
             char *start = input;
             while (!is_qoutes(input) || is_escape_char(prev)) {
                 if (is_empty(input)) {
-                    int col_no = column(input, row);
+                    int col_no = column(input, row_start);
                     char *err = "missing string delimiter, expected '\"'";
-                    return create_error(token_list, row_no, col_no, err, row);
+                    return create_error(token_list, row_no, col_no, err, row_start);
                 }
                 input++;
                 prev++;
             }
             token *string = create_token(start, input, TOKEN_STRING,
-                                         row_no, row);
+                                         row_no, row_start);
             token_list = add_token(string, token_list);
             input++;
-        } else if (is_comment(input)) {
-            while (!is_empty(input)) input++;
+        } else if (is_reserved_symbol(input)) {
+            char *start = input;
+            ++input;
+            token *res_sym = create_token(start, input, TOKEN_RESERVED_SYMBOL,
+                                          row_no, row_start);
+            token_list = add_token(res_sym, token_list);
         } else if (is_symbol(input)) {
             char *start = input;
             while (is_symbol(input) && !is_empty(input)) input++;
             if (input != start) {
                 token *symbol = create_token(start, input, TOKEN_SYMBOL,
-                                             row_no, row);
+                                             row_no, row_start);
                 token_list = add_token(symbol, token_list);
             }
-        } else if (is_reserved_symbol(input)) {
-            char *start = input;
-            ++input;
-            token *res_sym = create_token(start, input, TOKEN_RESERVED_SYMBOL,
-                                          row_no, row);
-            token_list = add_token(res_sym, token_list);
-        } else if (is_space(input)) {
-            input++;
-        } else {
-            int col_no = column(input, row);
-            char *err = "Failed to tokenize";
-            return create_error(token_list, row_no, col_no, err, row);
         }
-    }
-
-    return token_list;
-}
-
-
-tokens *tokenize(char *input) {
-    tokens *token_list = init_tokens();
-    rows *r = to_rows(input);
-
-    for (int row_no = 0; row_no < r->count; row_no++) {
-        char *row = r->items[row_no];
-        token_list = tokenize_row(row, row_no + 1, token_list);
     }
 
     return token_list;

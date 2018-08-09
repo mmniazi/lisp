@@ -77,24 +77,29 @@ ast *add_child(ast *tree, ast *child) {
 }
 
 ast *parse_expr(tokens *t, int *start, int end, int type) {
-    int token_no = *start + 1;
-
+    int token_no = *start;
+    int same_expr_nesting = 1;
+    char *err;
+    bool (*is_expr_end)(token *);
+    bool (*is_expr_start)(token *);
     if (type == AST_SEXPR) {
-        while (!is_sexpr_end(t->items[token_no])) {
-            if (token_no == end - 1) {
-                char *err = "missing s-expression closing brace, expected ')'";
-                return create_ast_val(AST_ERROR, err, t->items[token_no]->context);
-            }
-            token_no++;
-        }
+        is_expr_start = &is_sexpr_start;
+        is_expr_end = &is_sexpr_end;
+        err = "missing s-expression closing brace, expected ')'";
     } else {
-        while (!is_qexpr_end(t->items[token_no])) {
-            if (token_no == end - 1) {
-                char *err = "missing q-expression closing brace, expected '}'";
-                return create_ast_val(AST_ERROR, err, t->items[token_no]->context);
-            }
-            token_no++;
-        }
+        is_expr_start = &is_qexpr_start;
+        is_expr_end = &is_qexpr_end;
+        err = "missing q-expression closing brace, expected '}'";
+    }
+
+    while (same_expr_nesting) {
+        token_no++;
+        if (token_no == end)
+            return create_ast_val(AST_ERROR, err, t->items[token_no - 1]->context);
+        if (is_expr_start(t->items[token_no]))
+            same_expr_nesting++;
+        if (is_expr_end(t->items[token_no]))
+            same_expr_nesting--;
     }
 
     ast *tree = create_ast_expr(type, t->items[*start]->context);
