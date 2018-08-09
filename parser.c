@@ -38,7 +38,7 @@ ast *create_ast_val(int type, const char *val, code_context *c) {
     ast_val->val = str_dup(val);
     ast_val->child_count = 0;
     ast_val->children = NULL;
-    ast_val->context = create_context(c->row, c->col, c->trace);
+    ast_val->context = copy_context(c);
     return ast_val;
 }
 
@@ -49,7 +49,7 @@ ast *create_ast_expr(int type, code_context *c) {
     ast_expr->child_count = 0;
     ast_expr->children = NULL;
     if (c == NULL) ast_expr->context = c;
-    else ast_expr->context = create_context(c->row, c->col, c->trace);
+    else ast_expr->context = copy_context(c);
     return ast_expr;
 }
 

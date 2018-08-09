@@ -35,6 +35,7 @@ struct lval {
     char *err;
     char *sym;
     char *str;
+    code_context *context;
 
     /* Function */
     lbuiltin builtin;
@@ -54,24 +55,27 @@ struct lenv {
     lval **vals;
 };
 
-lval *lval_num(long x) {
+lval *lval_num(long x, code_context *c) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_NUM;
     v->num = x;
+    v->context = copy_context(c);
     return v;
 }
 
-lval *lval_str(char *x) {
+lval *lval_str(char *x, code_context *c) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_STR;
     v->str = malloc(strlen(x) + 1);
     strcpy(v->str, x);
+    v->context = copy_context(c);
     return v;
 }
 
-lval *lval_err(char *fmt, ...) {
+lval *lval_err(code_context *c, char *fmt, ...) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_ERR;
+    v->context = copy_context(c);
 
     /* Create a va list and initialize it */
     va_list va;
@@ -92,27 +96,30 @@ lval *lval_err(char *fmt, ...) {
     return v;
 }
 
-lval *lval_sym(char *s) {
+lval *lval_sym(char *s, code_context *c) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_SYM;
     v->sym = malloc(strlen(s) + 1);
+    v->context = copy_context(c);
     strcpy(v->sym, s);
     return v;
 }
 
-lval *lval_sexpr(void) {
+lval *lval_sexpr(code_context *c) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_SEXPR;
     v->count = 0;
     v->cell = NULL;
+    v->context = copy_context(c);
     return v;
 }
 
-lval *lval_qexpr(void) {
+lval *lval_qexpr(code_context *c) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_QEXPR;
     v->count = 0;
     v->cell = NULL;
+    v->context = copy_context(c);
     return v;
 }
 
@@ -120,10 +127,11 @@ lval *lval_func(lbuiltin func) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_FUN;
     v->builtin = func;
+    v->context = NULL;
     return v;
 }
 
-lval *lval_lambda(lval *formals, lval *body) {
+lval *lval_lambda(lval *formals, lval *body, code_context *c) {
     lval *v = malloc(sizeof(lval));
     v->type = LVAL_FUN;
 
@@ -136,6 +144,7 @@ lval *lval_lambda(lval *formals, lval *body) {
     /* Set Formals and Body */
     v->formals = formals;
     v->body = body;
+    v->context = copy_context(c);
     return v;
 }
 
@@ -169,6 +178,7 @@ void lval_del(lval *v) {
         default:
             break;
     }
+    free_context(v->context);
     free(v);
 }
 
@@ -176,7 +186,7 @@ lval *lval_read_num(ast *t) {
     errno = 0;
     long x = strtol(t->val, NULL, 10);
     return errno != ERANGE ?
-           lval_num(x) : lval_err("invalid number");
+           lval_num(x, t->context) : lval_err(t->context, "invalid number");
 }
 
 lval *lval_add(lval *v, lval *x) {
@@ -188,12 +198,12 @@ lval *lval_add(lval *v, lval *x) {
 
 lval *lval_read(ast *t) {
     if (t->type == AST_NUMBER) { return lval_read_num(t); }
-    if (t->type == AST_STRING) { return lval_str(t->val); }
-    if (t->type == AST_SYMBOL) { return lval_sym(t->val); }
+    if (t->type == AST_STRING) { return lval_str(t->val, t->context); }
+    if (t->type == AST_SYMBOL) { return lval_sym(t->val, t->context); }
 
     lval *v = NULL;
-    if (t->type == AST_SEXPR) { v = lval_sexpr(); }
-    else if (t->type == AST_QEXPR) { v = lval_qexpr(); }
+    if (t->type == AST_SEXPR) { v = lval_sexpr(t->context); }
+    else if (t->type == AST_QEXPR) { v = lval_qexpr(t->context); }
 
     for (int i = 0; i < t->child_count; i++)
         v = lval_add(v, lval_read(t->children[i]));
@@ -223,7 +233,6 @@ lval *lval_copy(lval *v) {
             x->num = v->num;
             break;
 
-            /* Copy Strings using malloc and strcpy */
         case LVAL_ERR:
             x->err = malloc(strlen(v->err) + 1);
             strcpy(x->err, v->err);
@@ -373,7 +382,9 @@ void lval_print(lval *v) {
             printf("%li", v->num);
             break;
         case LVAL_ERR:
-            printf("Error: %s", v->err);
+            printf("Error on row %d column %d: %s\n"
+                   "Stack Trace:\n%s\n",
+                   v->context->row, v->context->col, v->err, v->context->trace);
             break;
         case LVAL_SYM:
             printf("%s", v->sym);
@@ -442,7 +453,7 @@ lval *lenv_get(lenv *e, lval *k) {
     if (e->par) {
         return lenv_get(e->par, k);
     } else {
-        return lval_err("Unbound Symbol '%s'", k->sym);
+        return lval_err(k->context, "Unbound Symbol '%s'", k->sym);
     }
 }
 

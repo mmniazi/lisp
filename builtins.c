@@ -2,7 +2,7 @@
 #include "lval.c"
 
 #define LASSERT(args, cond, fmt, ...) \
-  if (!(cond)) { lval* err = lval_err(fmt, ##__VA_ARGS__); lval_del(args); return err; }
+  if (!(cond)) { lval* err = lval_err(args->context, fmt, ##__VA_ARGS__); lval_del(args); return err; }
 
 #define LASSERT_TYPE(func, args, index, expect) \
   LASSERT(args, (args)->cell[index]->type == (expect), \
@@ -100,7 +100,7 @@ lval *builtin_op(lenv *e, lval *a, char *op) {
             if (y->num == 0) {
                 lval_del(x);
                 lval_del(y);
-                x = lval_err("Division By Zero!");
+                x = lval_err(y->context, "Division By Zero!");
                 break;
             }
             x->num /= y->num;
@@ -160,8 +160,9 @@ lval *builtin_var(lenv *e, lval *a, char *func) {
         }
     }
 
+    lval *empty_res = lval_sexpr(a->context);
     lval_del(a);
-    return lval_sexpr();
+    return empty_res;
 }
 
 lval *builtin_def(lenv *e, lval *a) {
@@ -193,9 +194,10 @@ lval *builtin_lambda(lenv *e, lval *a) {
     /* Pop first two arguments and pass them to lval_lambda */
     lval *formals = lval_pop(a, 0);
     lval *body = lval_pop(a, 0);
-    lval_del(a);
 
-    return lval_lambda(formals, body);
+    lval *res = lval_lambda(formals, body, a->context);
+    lval_del(a);
+    return res;
 }
 
 lval *builtin_fun(lenv *e, lval *a) {
@@ -217,8 +219,8 @@ lval *builtin_fun(lenv *e, lval *a) {
     lval *body = lval_pop(a, 0);
     lval_del(a);
 
-    lval *params = lval_add(lval_qexpr(), lval_add(lval_qexpr(), name));
-    lval_add(params, lval_lambda(formals, body));
+    lval *params = lval_add(lval_qexpr(name->context), lval_add(lval_qexpr(name->context), name));
+    lval_add(params, lval_lambda(formals, body, a->context));
 
     return builtin_def(e, params);
 }
@@ -242,7 +244,7 @@ lval *builtin_ord(lenv *e, lval *a, char *op) {
         r = (a->cell[0]->num <= a->cell[1]->num);
     }
     lval_del(a);
-    return lval_num(r);
+    return lval_num(r, a->context);
 }
 
 lval *builtin_gt(lenv *e, lval *a) {
@@ -271,7 +273,7 @@ lval *builtin_cmp(lenv *e, lval *a, char *op) {
         r = !lval_eq(a->cell[0], a->cell[1]);
     }
     lval_del(a);
-    return lval_num(r);
+    return lval_num(r, a->context);
 }
 
 lval *builtin_eq(lenv *e, lval *a) {
@@ -310,7 +312,7 @@ lval *builtin_or(lenv *e, lval *a) {
     LASSERT_TYPE("or", a, 1, LVAL_NUM);
 
     lval_del(a);
-    return lval_num(a->cell[0]->num || a->cell[1]->num);
+    return lval_num(a->cell[0]->num || a->cell[1]->num, a->context);
 }
 
 lval *builtin_and(lenv *e, lval *a) {
@@ -319,7 +321,7 @@ lval *builtin_and(lenv *e, lval *a) {
     LASSERT_TYPE("and", a, 1, LVAL_NUM);
 
     lval_del(a);
-    return lval_num(a->cell[0]->num && a->cell[1]->num);
+    return lval_num(a->cell[0]->num && a->cell[1]->num, a->context);
 }
 
 lval *builtin_not(lenv *e, lval *a) {
@@ -327,11 +329,11 @@ lval *builtin_not(lenv *e, lval *a) {
     LASSERT_TYPE("or", a, 0, LVAL_NUM);
 
     lval_del(a);
-    return lval_num(!a->cell[0]->num);
+    return lval_num(!a->cell[0]->num, a->context);
 }
 
 void lenv_add_builtin(lenv *e, char *name, lbuiltin func) {
-    lval *k = lval_sym(name);
+    lval *k = lval_sym(name, NULL);
     lval *v = lval_func(func);
     lenv_put(e, k, v);
     lval_del(k);
@@ -348,9 +350,10 @@ lval *builtin_print(lenv *e, lval *a) {
 
     /* Print a newline and delete arguments */
     putchar('\n');
-    lval_del(a);
 
-    return lval_sexpr();
+    lval *empty_res = lval_sexpr(a->context);
+    lval_del(a);
+    return empty_res;
 }
 
 lval *builtin_error(lenv *e, lval *a) {
@@ -358,7 +361,7 @@ lval *builtin_error(lenv *e, lval *a) {
     LASSERT_TYPE("error", a, 0, LVAL_STR);
 
     /* Construct Error from first argument */
-    lval *err = lval_err(a->cell[0]->str);
+    lval *err = lval_err(a->context, a->cell[0]->str);
 
     /* Delete arguments and return */
     lval_del(a);
@@ -387,6 +390,7 @@ lval *lval_eval_sexpr(lenv *e, lval *v) {
     lval *f = lval_pop(v, 0);
     if (f->type != LVAL_FUN) {
         lval *err = lval_err(
+                f->context,
                 "S-Expression starts with incorrect type. "
                 "Got %s, Expected %s.",
                 ltype_name(f->type), ltype_name(LVAL_FUN));
@@ -426,9 +430,9 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
         /* If we've ran out of formal arguments to bind */
         if (f->formals->count == 0) {
             lval_del(a);
-            return lval_err(
-                    "Function passed too many arguments. "
-                    "Got %i, Expected %i.", given, total);
+            return lval_err(f->context,
+                            "Function passed too many arguments. "
+                            "Got %i, Expected %i.", given, total);
         }
 
         /* Pop the first symbol from the formals */
@@ -440,7 +444,8 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
             /* Ensure '&' is followed by another symbol */
             if (f->formals->count != 1) {
                 lval_del(a);
-                return lval_err("Function format invalid. "
+                return lval_err(sym->context,
+                                "Function format invalid. "
                                 "Symbol '&' not followed by single symbol.");
             }
 
@@ -472,7 +477,8 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
 
         /* Check to ensure that & is not passed invalidly. */
         if (f->formals->count != 2) {
-            return lval_err("Function format invalid. "
+            return lval_err(f->context,
+                            "Function format invalid. "
                             "Symbol '&' not followed by single symbol.");
         }
 
@@ -481,7 +487,7 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
 
         /* Pop next symbol and create empty list */
         lval *sym = lval_pop(f->formals, 0);
-        lval *val = lval_qexpr();
+        lval *val = lval_qexpr(sym->context);
 
         /* Bind to environment and delete */
         lenv_put(f->env, sym, val);
@@ -495,7 +501,7 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
         /* Set environment parent to evaluation environment */
         f->env->par = e;
 
-        lval *body = lval_add(lval_sexpr(), lval_copy(f->body));
+        lval *body = lval_add(lval_sexpr(f->body->context), lval_copy(f->body));
 
         /* Evaluate and return */
         return builtin_eval(f->env, body);
@@ -506,14 +512,10 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
 
 }
 
-lval *builtin_load_file(lenv *e, lval *file) {
-    LASSERT_NUM("load", file, 1);
-    LASSERT_TYPE("load", file, 0, LVAL_STR);
-
-    char *file_name = file->cell[0]->str;
-    char *file_content = load_file(file_name);
+lval *builtin_load_file(lenv *e, char *file, code_context *c) {
+    char *file_content = load_file(file);
     if (file_content == NULL)
-        return lval_err("Could not load %s: Failed to load file", file_name);
+        return lval_err(c, "Could not load '%s': Failed to load file", file);
 
     ast *tree = parse(file_content);
 
@@ -530,18 +532,25 @@ lval *builtin_load_file(lenv *e, lval *file) {
 
         free_ast(tree);
         lval_del(expr);
-        lval_del(file);
+        free(file);
 
-        return lval_sexpr();
+        return lval_sexpr(c);
     } else {
         char *err_str = ast_error_str(tree->context, tree->val);
-        lval *err = lval_err("Could not load %s: \n%s", file_name, err_str);
+        lval *err = lval_err(c, "Could not load %s: \n%s", file, err_str);
 
         free_ast(tree);
-        lval_del(file);
+        free(file);
 
         return err;
     }
+}
+
+lval *builtin_load_file_lval(lenv *e, lval *file) {
+    LASSERT_NUM("load", file, 1);
+    LASSERT_TYPE("load", file, 0, LVAL_STR);
+
+    return builtin_load_file(e, file->cell[0]->str, file->context);
 }
 
 void lenv_add_builtins(lenv *e) {
@@ -581,12 +590,12 @@ void lenv_add_builtins(lenv *e) {
     lenv_add_builtin(e, "||", builtin_or);
     lenv_add_builtin(e, "&&", builtin_and);
     lenv_add_builtin(e, "!", builtin_not);
-    lenv_put(e, lval_sym("true"), lval_num(1));
-    lenv_put(e, lval_sym("false"), lval_num(0));
+    lenv_put(e, lval_sym("true", NULL), lval_num(1, NULL));
+    lenv_put(e, lval_sym("false", NULL), lval_num(0, NULL));
 
     /* Generic Functions */
     /* String Functions */
-    lenv_add_builtin(e, "load", builtin_load_file);
+    lenv_add_builtin(e, "load", builtin_load_file_lval);
     lenv_add_builtin(e, "error", builtin_error);
     lenv_add_builtin(e, "print", builtin_print);
 }
@@ -595,14 +604,11 @@ void load_input_files(int argc, char **argv, lenv *e) {
     /* Supplied with list of files */
     if (argc >= 2) {
 
-        /* loop over each supplied filename (starting from 1) */
+        /* loop over each supplied filename */
         for (int i = 1; i < argc; i++) {
 
-            /* Argument list with a single argument, the filename */
-            lval *args = lval_add(lval_sexpr(), lval_str(argv[i]));
-
             /* Pass to builtin load and get the result */
-            lval *x = builtin_load_file(e, args);
+            lval *x = builtin_load_file(e, argv[i], NULL);
 
             /* If the result is an error be sure to print it */
             if (x->type == LVAL_ERR) { lval_println(x); }

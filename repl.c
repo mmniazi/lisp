@@ -19,7 +19,7 @@ void repl(lenv *e) {
             lval_println(x);
             lval_del(x);
         } else {
-            lval *err = lval_err(ast_error_str(tree->context, tree->val));
+            lval *err = lval_err(tree->context, ast_error_str(tree->context, tree->val));
             lval_println(err);
         }
 

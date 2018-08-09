@@ -94,6 +94,11 @@ code_context *create_context(int row, int col, const char *trace) {
     return context;
 }
 
+code_context *copy_context(code_context *c) {
+    if (!c) return c;
+    return create_context(c->row, c->col, c->trace);
+}
+
 token *create_token(const char *start, const char *curr_loc, int type,
                     int row_no, const char *row) {
     int col_no = column(start, row);
