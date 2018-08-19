@@ -1,7 +1,7 @@
 ; Atoms
 (def {nil} {})
 (def {true} 1)
-(def {false} 0 2 3 )
+(def {false} 0)
 
 ; Call function with given list of args
 (fun {unpack f l} {

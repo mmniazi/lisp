@@ -49,14 +49,14 @@ struct lval {
 };
 
 struct lenv {
-    lenv *par;
+    lenv *parent;
     int count;
     char **syms;
     lval **vals;
 };
 
 lval *lval_num(long x, code_context *c) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_NUM;
     v->num = x;
     v->context = copy_context(c);
@@ -64,16 +64,16 @@ lval *lval_num(long x, code_context *c) {
 }
 
 lval *lval_str(char *x, code_context *c) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_STR;
-    v->str = malloc(strlen(x) + 1);
+    v->str = calloc(1, strlen(x) + 1);
     strcpy(v->str, x);
     v->context = copy_context(c);
     return v;
 }
 
 lval *lval_err(code_context *c, char *fmt, ...) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_ERR;
     v->context = copy_context(c);
 
@@ -82,7 +82,7 @@ lval *lval_err(code_context *c, char *fmt, ...) {
     va_start(va, fmt);
 
     /* Allocate 512 bytes of space */
-    v->err = malloc(512);
+    v->err = calloc(1, 512);
 
     /* printf the error string with a maximum of 511 characters */
     vsnprintf(v->err, 511, fmt, va);
@@ -97,16 +97,16 @@ lval *lval_err(code_context *c, char *fmt, ...) {
 }
 
 lval *lval_sym(char *s, code_context *c) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_SYM;
-    v->sym = malloc(strlen(s) + 1);
+    v->sym = calloc(1, strlen(s) + 1);
     v->context = copy_context(c);
     strcpy(v->sym, s);
     return v;
 }
 
 lval *lval_sexpr(code_context *c) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_SEXPR;
     v->count = 0;
     v->cell = NULL;
@@ -115,7 +115,7 @@ lval *lval_sexpr(code_context *c) {
 }
 
 lval *lval_qexpr(code_context *c) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_QEXPR;
     v->count = 0;
     v->cell = NULL;
@@ -124,7 +124,7 @@ lval *lval_qexpr(code_context *c) {
 }
 
 lval *lval_func(lbuiltin func) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_FUN;
     v->builtin = func;
     v->context = NULL;
@@ -132,7 +132,7 @@ lval *lval_func(lbuiltin func) {
 }
 
 lval *lval_lambda(lval *formals, lval *body, code_context *c) {
-    lval *v = malloc(sizeof(lval));
+    lval *v = calloc(1, sizeof(lval));
     v->type = LVAL_FUN;
 
     /* Set Builtin to Null */
@@ -213,7 +213,7 @@ lval *lval_read(ast *t) {
 
 lval *lval_copy(lval *v) {
 
-    lval *x = malloc(sizeof(lval));
+    lval *x = calloc(1, sizeof(lval));
     x->type = v->type;
 
     switch (v->type) {
@@ -234,12 +234,12 @@ lval *lval_copy(lval *v) {
             break;
 
         case LVAL_ERR:
-            x->err = malloc(strlen(v->err) + 1);
+            x->err = calloc(1, strlen(v->err) + 1);
             strcpy(x->err, v->err);
             break;
 
         case LVAL_SYM:
-            x->sym = malloc(strlen(v->sym) + 1);
+            x->sym = calloc(1, strlen(v->sym) + 1);
             strcpy(x->sym, v->sym);
             break;
 
@@ -247,13 +247,13 @@ lval *lval_copy(lval *v) {
         case LVAL_SEXPR:
         case LVAL_QEXPR:
             x->count = v->count;
-            x->cell = malloc(sizeof(lval *) * x->count);
+            x->cell = calloc((size_t) x->count, sizeof(lval *));
             for (int i = 0; i < x->count; i++) {
                 x->cell[i] = lval_copy(v->cell[i]);
             }
             break;
         case LVAL_STR:
-            x->str = malloc(strlen(v->str) + 1);
+            x->str = calloc(1, strlen(v->str) + 1);
             strcpy(x->str, v->str);
             break;
         default:
@@ -382,9 +382,9 @@ void lval_print(lval *v) {
             printf("%li", v->num);
             break;
         case LVAL_ERR:
-            printf("Error on row %d column %d: %s\n"
-                   "Stack Trace:\n%s\n",
-                   v->context->row, v->context->col, v->err, v->context->trace);
+            printf("Error: %s\n"
+                   "Context (Row %d Column %d):\n%s\n",
+                   v->err, v->context->row, v->context->col, v->context->trace);
             break;
         case LVAL_SYM:
             printf("%s", v->sym);
@@ -420,8 +420,8 @@ void lval_println(lval *v) {
 }
 
 lenv *lenv_new(void) {
-    lenv *e = malloc(sizeof(lenv));
-    e->par = NULL;
+    lenv *e = calloc(1, sizeof(lenv));
+    e->parent = NULL;
     e->count = 0;
     e->syms = NULL;
     e->vals = NULL;
@@ -450,8 +450,8 @@ lval *lenv_get(lenv *e, lval *k) {
     }
 
     /* If no symbol check in parent otherwise error */
-    if (e->par) {
-        return lenv_get(e->par, k);
+    if (e->parent) {
+        return lenv_get(e->parent, k);
     } else {
         return lval_err(k->context, "Unbound Symbol '%s'", k->sym);
     }
@@ -479,18 +479,18 @@ void lenv_put(lenv *e, lval *k, lval *v) {
 
     /* Copy contents of lval and symbol string into new location */
     e->vals[e->count - 1] = lval_copy(v);
-    e->syms[e->count - 1] = malloc(strlen(k->sym) + 1);
+    e->syms[e->count - 1] = calloc(1, strlen(k->sym) + 1);
     strcpy(e->syms[e->count - 1], k->sym);
 }
 
 lenv *lenv_copy(lenv *e) {
-    lenv *n = malloc(sizeof(lenv));
-    n->par = e->par;
+    lenv *n = calloc(1, sizeof(lenv));
+    n->parent = e->parent;
     n->count = e->count;
-    n->syms = malloc(sizeof(char *) * n->count);
-    n->vals = malloc(sizeof(lval *) * n->count);
+    n->syms = calloc((size_t) n->count, sizeof(char *));
+    n->vals = calloc((size_t) n->count, sizeof(lval *));
     for (int i = 0; i < e->count; i++) {
-        n->syms[i] = malloc(strlen(e->syms[i]) + 1);
+        n->syms[i] = calloc(1, strlen(e->syms[i]) + 1);
         strcpy(n->syms[i], e->syms[i]);
         n->vals[i] = lval_copy(e->vals[i]);
     }
@@ -499,7 +499,7 @@ lenv *lenv_copy(lenv *e) {
 
 void lenv_def(lenv *e, lval *k, lval *v) {
     /* Iterate till e has no parent */
-    while (e->par) { e = e->par; }
+    while (e->parent) { e = e->parent; }
     /* Put value in e */
     lenv_put(e, k, v);
 }

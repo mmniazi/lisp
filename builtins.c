@@ -99,8 +99,8 @@ lval *builtin_op(lenv *e, lval *a, char *op) {
         if (strcmp(op, "/") == 0) {
             if (y->num == 0) {
                 lval_del(x);
-                lval_del(y);
                 x = lval_err(y->context, "Division By Zero!");
+                lval_del(y);
                 break;
             }
             x->num /= y->num;
@@ -217,10 +217,11 @@ lval *builtin_fun(lenv *e, lval *a) {
     lval *formals = lval_pop(a, 0);
     lval *name = lval_pop(formals, 0);
     lval *body = lval_pop(a, 0);
-    lval_del(a);
 
     lval *params = lval_add(lval_qexpr(name->context), lval_add(lval_qexpr(name->context), name));
     lval_add(params, lval_lambda(formals, body, a->context));
+
+    lval_del(a);
 
     return builtin_def(e, params);
 }
@@ -243,8 +244,9 @@ lval *builtin_ord(lenv *e, lval *a, char *op) {
     if (strcmp(op, "<=") == 0) {
         r = (a->cell[0]->num <= a->cell[1]->num);
     }
+    lval *num = lval_num(r, a->context);
     lval_del(a);
-    return lval_num(r, a->context);
+    return num;
 }
 
 lval *builtin_gt(lenv *e, lval *a) {
@@ -272,8 +274,9 @@ lval *builtin_cmp(lenv *e, lval *a, char *op) {
     if (strcmp(op, "!=") == 0) {
         r = !lval_eq(a->cell[0], a->cell[1]);
     }
+    lval *num = lval_num(r, a->context);
     lval_del(a);
-    return lval_num(r, a->context);
+    return num;
 }
 
 lval *builtin_eq(lenv *e, lval *a) {
@@ -311,8 +314,11 @@ lval *builtin_or(lenv *e, lval *a) {
     LASSERT_TYPE("or", a, 0, LVAL_NUM);
     LASSERT_TYPE("or", a, 1, LVAL_NUM);
 
+    lval *num = lval_num(a->cell[0]->num || a->cell[1]->num, a->context);
+
     lval_del(a);
-    return lval_num(a->cell[0]->num || a->cell[1]->num, a->context);
+
+    return num;
 }
 
 lval *builtin_and(lenv *e, lval *a) {
@@ -320,16 +326,20 @@ lval *builtin_and(lenv *e, lval *a) {
     LASSERT_TYPE("and", a, 0, LVAL_NUM);
     LASSERT_TYPE("and", a, 1, LVAL_NUM);
 
+    lval *num = lval_num(a->cell[0]->num && a->cell[1]->num, a->context);
     lval_del(a);
-    return lval_num(a->cell[0]->num && a->cell[1]->num, a->context);
+    return num;
 }
 
 lval *builtin_not(lenv *e, lval *a) {
     LASSERT_NUM("or", a, 1);
     LASSERT_TYPE("or", a, 0, LVAL_NUM);
 
+    lval *num = lval_num(!a->cell[0]->num, a->context);
+
     lval_del(a);
-    return lval_num(!a->cell[0]->num, a->context);
+
+    return num;
 }
 
 void lenv_add_builtin(lenv *e, char *name, lbuiltin func) {
@@ -499,7 +509,7 @@ lval *lval_call(lenv *e, lval *f, lval *a) {
     if (f->formals->count == 0) {
 
         /* Set environment parent to evaluation environment */
-        f->env->par = e;
+        f->env->parent = e;
 
         lval *body = lval_add(lval_sexpr(f->body->context), lval_copy(f->body));
 
@@ -532,15 +542,12 @@ lval *builtin_load_file(lenv *e, char *file, code_context *c) {
 
         free_ast(tree);
         lval_del(expr);
-        free(file);
 
         return lval_sexpr(c);
     } else {
-        char *err_str = ast_error_str(tree->context, tree->val);
-        lval *err = lval_err(c, "Could not load %s: \n%s", file, err_str);
+        lval *err = lval_err(tree->context, "Could not load %s: \n%s", file, tree->val);
 
         free_ast(tree);
-        free(file);
 
         return err;
     }

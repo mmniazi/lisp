@@ -1,8 +1,6 @@
 #include <stdbool.h>
 #include "tokenizer.c"
 
-int ERROR_STR_SIZE = 500;
-
 enum {
     AST_NUMBER,
     AST_STRING,
@@ -22,18 +20,8 @@ typedef struct ast {
 
 ast *parse_children(ast *tree, tokens *t, int start, int end);
 
-char *ast_error_str(code_context *c, const char *e) {
-    char *str = malloc(sizeof(char) * ERROR_STR_SIZE);
-    snprintf(str, ERROR_STR_SIZE,
-             "error on row %d column %d: %s\n"
-             "Stack Trace:\n"
-             "%s\n",
-             c->row, c->col, e, c->trace);
-    return str;
-}
-
 ast *create_ast_val(int type, const char *val, code_context *c) {
-    ast *ast_val = malloc(sizeof(ast));
+    ast *ast_val = calloc(1, sizeof(ast));
     ast_val->type = type;
     ast_val->val = str_dup(val);
     ast_val->child_count = 0;
@@ -43,7 +31,7 @@ ast *create_ast_val(int type, const char *val, code_context *c) {
 }
 
 ast *create_ast_expr(int type, code_context *c) {
-    ast *ast_expr = malloc(sizeof(ast));
+    ast *ast_expr = calloc(1, sizeof(ast));
     ast_expr->type = type;
     ast_expr->val = NULL;
     ast_expr->child_count = 0;
