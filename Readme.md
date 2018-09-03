@@ -32,9 +32,6 @@ Lisp interpreter written in C
     { otherwise (+ (fib (- n 1)) (fib (- n 2))) }
 })
 ```
-```
-
-```
 
 ## Standard Library
 #### curry
