@@ -4,7 +4,7 @@
 #include "builtins.c"
 
 void repl(lenv *e) {
-    puts("Lisp version 0.0.1");
+    puts("Lisp version 0.2.0");
     puts("Enter exit for closing repl\n");
 
 #pragma clang diagnostic push

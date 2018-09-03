@@ -215,6 +215,7 @@ lval *lval_copy(lval *v) {
 
     lval *x = calloc(1, sizeof(lval));
     x->type = v->type;
+    x->context = copy_context(v->context);
 
     switch (v->type) {
 
@@ -383,7 +384,7 @@ void lval_print(lval *v) {
             break;
         case LVAL_ERR:
             printf("Error: %s\n"
-                   "Context (Row %d Column %d):\n%s\n",
+                   "Context (Row %d Column %d):\n%.50s\n",
                    v->err, v->context->row, v->context->col, v->context->trace);
             break;
         case LVAL_SYM:

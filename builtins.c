@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include "lval.c"
 
+char* STD_LIB = "./library/standard_library.lisp";
+
 #define LASSERT(args, cond, fmt, ...) \
   if (!(cond)) { lval* err = lval_err(args->context, fmt, ##__VA_ARGS__); lval_del(args); return err; }
 
@@ -96,6 +98,7 @@ lval *builtin_op(lenv *e, lval *a, char *op) {
         if (strcmp(op, "+") == 0) { x->num += y->num; }
         if (strcmp(op, "-") == 0) { x->num -= y->num; }
         if (strcmp(op, "*") == 0) { x->num *= y->num; }
+        if (strcmp(op, "%") == 0) { x->num %= y->num; }
         if (strcmp(op, "/") == 0) {
             if (y->num == 0) {
                 lval_del(x);
@@ -127,6 +130,10 @@ lval *builtin_mul(lenv *e, lval *a) {
 
 lval *builtin_div(lenv *e, lval *a) {
     return builtin_op(e, a, "/");
+}
+
+lval *builtin_mod(lenv *e, lval *a) {
+    return builtin_op(e, a, "%");
 }
 
 lval *builtin_var(lenv *e, lval *a, char *func) {
@@ -573,6 +580,7 @@ void lenv_add_builtins(lenv *e) {
     lenv_add_builtin(e, "-", builtin_sub);
     lenv_add_builtin(e, "*", builtin_mul);
     lenv_add_builtin(e, "/", builtin_div);
+    lenv_add_builtin(e, "%", builtin_mod);
 
     /* Variable Functions */
     lenv_add_builtin(e, "def", builtin_def);
@@ -608,18 +616,14 @@ void lenv_add_builtins(lenv *e) {
 }
 
 void load_input_files(int argc, char **argv, lenv *e) {
-    /* Supplied with list of files */
-    if (argc >= 2) {
-
-        /* loop over each supplied filename */
-        for (int i = 1; i < argc; i++) {
-
-            /* Pass to builtin load and get the result */
-            lval *x = builtin_load_file(e, argv[i], NULL);
-
-            /* If the result is an error be sure to print it */
-            if (x->type == LVAL_ERR) { lval_println(x); }
-            lval_del(x);
-        }
+    /* first file is always standard lib*/
+    argv[0] = STD_LIB;
+    /* loop over each supplied filename */
+    for (int i = 0; i < argc; i++) {
+        /* Pass to builtin load and get the result */
+        lval *x = builtin_load_file(e, argv[i], NULL);
+        /* If the result is an error be sure to print it */
+        if (x->type == LVAL_ERR) { lval_println(x); }
+        lval_del(x);
     }
 }

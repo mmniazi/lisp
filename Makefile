@@ -1,6 +1,6 @@
 all: clean
-	cc -std=c99 -Wall repl.c -ledit -o repl
-	./repl standard_lib.lisp
+	cc -std=c99 -Wall lisp.c -ledit -o lisp
+	chmod +x lisp
 
 clean:
-	rm -f repl
+	rm -f lisp

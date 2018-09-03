@@ -24,7 +24,7 @@
 
 ; Create a local scope
 (fun {let body} {
-	((lambda {_} b) ())
+	((lambda {_} body) ())
 })
 
 ; Logical Functions
@@ -91,7 +91,7 @@
     {join (list (f (fst l))) (map f (tail l))}
 })
 
-; create a new list of items which match the condition
+; Create a new list of items which match the condition
 (fun {filter f l} {
 	if (== l nil)
 	{nil}
@@ -107,7 +107,9 @@
 
 ; switch statement, takes zero or more (cond, body) pairs
 (fun {select & cs} {
-	if (fst (fst cs)) {snd (fst cs)} {unpack switch (tail cs)}
+  if (== cs nil)
+    {error "No Selection Found"}
+    {if (fst (fst cs)) {snd (fst cs)} {unpack select (tail cs)}}
 })
 
 ; Default Case
