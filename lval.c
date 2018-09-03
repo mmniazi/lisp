@@ -383,9 +383,12 @@ void lval_print(lval *v) {
             printf("%li", v->num);
             break;
         case LVAL_ERR:
+            if (v->context)
             printf("Error: %s\n"
                    "Context (Row %d Column %d):\n%.50s\n",
                    v->err, v->context->row, v->context->col, v->context->trace);
+            else
+                printf("Error: %s\n",v->err);
             break;
         case LVAL_SYM:
             printf("%s", v->sym);

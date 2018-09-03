@@ -1,6 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <editline/readline.h>
+
 #include "builtins.c"
 
 void repl(lenv *e) {
@@ -35,7 +33,8 @@ int main(int argc, char **argv) {
     lenv_add_builtins(global_env);
     load_input_files(argc, argv, global_env);
 
-    repl(global_env);
+    if (argc == 1)
+        repl(global_env);
 
     return 0;
 }
